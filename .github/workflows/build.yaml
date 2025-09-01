@@ -1,3 +1,4 @@
+```yaml
 name: LineageOS 18.1 GSI Build (aosp_arm-eng)
 
 on:
@@ -36,7 +37,8 @@ jobs:
           sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git \
           gnupg gperf imagemagick libncurses-dev:i386 libreadline-dev:i386 zlib1g:i386 \
           liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop openjdk-8-jdk \
-          pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev ccache xz-utils
+          pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev ccache xz-utils git-lfs
+          git lfs install
           java -version || true
           if ! java -version 2>&1 | grep "1.8"; then
             echo "OpenJDK 8 yükleniyor..."
@@ -61,12 +63,14 @@ jobs:
           sudo mkdir -p /mnt/lineage
           sudo chown $USER:$USER /mnt/lineage
 
-      - name: Initialize Minimal Manifest (phhusson)
+      - name: Initialize LineageOS Manifest
         run: |
-          echo "==== ADIM 6: Minimal Manifest (phhusson) Çekiliyor ===="
+          echo "==== ADIM 6: LineageOS Manifest Çekiliyor ===="
           cd /mnt/lineage
-          ~/bin/repo init -u https://github.com/phhusson/treble_manifest.git -b android-11.0
-          ~/bin/repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --depth=1 --verbose
+          ~/bin/repo init -u https://github.com/LineageOS/android.git -b lineage-18.1 --git-lfs
+          echo "Manifest başlatıldı."
+          ~/bin/repo sync -c -j$(nproc --all) --optimized-fetch --force-sync --no-tags --no-clone-bundle --depth=1
+          echo "Repo sync tamamlandı."
 
       - name: Enable ccache
         run: |
@@ -87,11 +91,8 @@ jobs:
           make systemimage -j$(nproc --all) 2>&1 | tee /mnt/lineage/build.log
           echo "==== Build Tamamlandı ===="
           ccache -s
-
-      - name: Show Build Summary
-        run: |
-          echo "==== Build Özeti ===="
-          tail -n 50 /mnt/lineage/build.log || echo "Log dosyası bulunamadı."
+          echo "Build log özeti:"
+          tail -n 20 /mnt/lineage/build.log
 
       - name: Show Last 100 Lines on Failure
         if: failure()
@@ -110,3 +111,4 @@ jobs:
         with:
           name: lineage18.1-aosp_arm-systemimg
           path: /mnt/lineage/out/target/product/generic/system.img.xz
+```
