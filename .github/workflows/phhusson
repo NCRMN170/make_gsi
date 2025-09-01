@@ -1,0 +1,57 @@
+name: Phhusson Android 11 Treble Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Workflow Repo
+        uses: actions/checkout@v3
+
+      - name: Install Build Dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git \
+          gnupg gperf imagemagick libncurses-dev:i386 libreadline-dev:i386 zlib1g:i386 \
+          liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop openjdk-8-jdk \
+          pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev ccache xz-utils git-lfs
+          git lfs install
+
+      - name: Setup Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo 'export PATH=~/bin:$PATH' >> ~/.bashrc
+          source ~/.bashrc
+
+      - name: Initialize and Sync Treble Manifest
+        run: |
+          mkdir -p $HOME/treble
+          cd $HOME/treble
+          ~/bin/repo init -u https://github.com/phhusson/treble_manifest -b android-11.0
+          ~/bin/repo sync -c -j$(nproc --all) --optimized-fetch --force-sync --no-tags --no-clone-bundle
+
+      - name: Enable ccache (optional)
+        run: |
+          export USE_CCACHE=1
+          export CCACHE_DIR=$HOME/ccache
+          ccache -M 10G
+          ccache -z
+
+      - name: Build Generic Treble GSI
+        run: |
+          cd $HOME/treble
+          source build/envsetup.sh
+          lunch treble_arm_avS-eng
+          make -j$(nproc --all) systemimage 2>&1 | tee $HOME/treble/build.log
+          ccache -s
+
+      - name: Upload GSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: treble_android11_gsi
+          path: $HOME/treble/out/target/product/generic/system.img
