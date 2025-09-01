@@ -1,0 +1,106 @@
+
+name: LineageOS 18.1 GSI Build (aosp_arm-eng)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Free Disk Space
+        run: |
+          echo "==== ADIM 1: Disk Temizleme ===="
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+
+      - name: Add 12GB Swap
+        run: |
+          echo "==== ADIM 2: 12GB Swap Oluşturma ===="
+          sudo swapoff -a
+          sudo fallocate -l 12G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Install Build Dependencies
+        run: |
+          echo "==== ADIM 3: Gerekli Paketler Kuruluyor ===="
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git \
+          gnupg gperf imagemagick libncurses-dev:i386 libreadline-dev:i386 zlib1g:i386 \
+          liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop openjdk-8-jdk \
+          pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev ccache xz-utils
+          java -version || true
+          # Eğer OpenJDK 8 yoksa PPA ekle
+          if ! java -version 2>&1 | grep "1.8"; then
+            sudo add-apt-repository ppa:openjdk-r/ppa -y
+            sudo apt-get update
+            sudo apt-get install -y openjdk-8-jdk
+          fi
+          java -version
+
+      - name: Set up Repo Tool
+        run: |
+          echo "==== ADIM 4: Repo Aracı Kuruluyor ===="
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo 'export PATH=~/bin:$PATH' >> ~/.bashrc
+          source ~/.bashrc
+
+      - name: Prepare Build Directory
+        run: |
+          echo "==== ADIM 5: Build Dizini Hazırlanıyor (/mnt/lineage) ===="
+          sudo mkdir -p /mnt/lineage
+          sudo chown $USER:$USER /mnt/lineage
+
+      - name: Initialize Minimal Manifest (phhusson)
+        run: |
+          echo "==== ADIM 6: Minimal Manifest (phhusson) Çekiliyor ===="
+          cd /mnt/lineage
+          ~/bin/repo init -u https://github.com/phhusson/treble_manifest.git -b android-11.0
+          ~/bin/repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --depth=1
+
+      - name: Enable ccache
+        run: |
+          echo "==== ADIM 7: ccache Etkinleştiriliyor ===="
+          export USE_CCACHE=1
+          export CCACHE_DIR=/mnt/ccache
+          ccache -M 10G
+          ccache -z
+
+      - name: Build GSI (aosp_arm-eng)
+        run: |
+          echo "==== ADIM 8: Build Başladı (aosp_arm-eng) ===="
+          cd /mnt/lineage
+          export USE_CCACHE=1
+          export CCACHE_DIR=/mnt/ccache
+          source build/envsetup.sh
+          lunch aosp_arm-eng
+          make systemimage -j$(nproc --all) 2>&1 | tee /mnt/lineage/build.log
+          echo "==== Build Tamamlandı ===="
+          ccache -s
+
+      - name: Show Last 100 Lines on Failure
+        if: failure()
+        run: |
+          echo "==== HATA OLUŞTU! Son 100 satır: ===="
+          tail -n 100 /mnt/lineage/build.log || echo "Log dosyası bulunamadı."
+
+      - name: Compress system.img
+        run: |
+          echo "==== ADIM 9: system.img Sıkıştırılıyor ===="
+          cd /mnt/lineage/out/target/product/generic
+          xz -z system.img
+
+      - name: Upload Artifact
+  uses: actions/upload-artifact@v4
+  with:
+    name: lineage18.1-aosp_arm-systemimg
+    path: /mnt/lineage/out/target/product/generic/system.img.xz
