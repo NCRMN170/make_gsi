@@ -110,4 +110,3 @@ jobs:
         with:
           name: lineage18.1-aosp_arm-systemimg
           path: /mnt/lineage/out/target/product/generic/system.img.xz
-```
