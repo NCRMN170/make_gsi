@@ -62,14 +62,16 @@ jobs:
           sudo mkdir -p /mnt/lineage
           sudo chown $USER:$USER /mnt/lineage
 
-      - name: Initialize LineageOS Manifest
+      - name: Initialize and Sync LineageOS Manifest
         run: |
           echo "==== ADIM 6: LineageOS Manifest Çekiliyor ===="
-          cd /mnt/lineage
+          mkdir -p $HOME/lineage
+          cd $HOME/lineage
           ~/bin/repo init -u https://github.com/LineageOS/android.git -b lineage-18.1 --git-lfs
           echo "Manifest başlatıldı."
-          ~/bin/repo sync -c -j$(nproc --all) --optimized-fetch --force-sync --no-tags --no-clone-bundle --depth=1
+          ~/bin/repo sync -c -j$(nproc --all) --optimized-fetch --force-sync 
           echo "Repo sync tamamlandı."
+
 
       - name: Enable ccache
         run: |
